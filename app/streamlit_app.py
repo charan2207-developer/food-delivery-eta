@@ -1,4 +1,4 @@
-"""D1–D6 Streamlit decision-support dashboard (offline ops-proxy demo).
+"""D1–D6 Streamlit decision-support dashboard (offline ops-proxy demo) + Predict.
 
     streamlit run app/streamlit_app.py
 
@@ -9,6 +9,7 @@ Data contract:
   D4 subgroups      <- artifacts/subgroup_metrics.csv
   D5 case table     <- hold-out join, constrained sample, no IDs / coordinates
   D6 notes          <- static copy (shared with the model card)
+  Predict           <- preferred_model.joblib + form over PREDICTORS (interactive only)
 """
 from __future__ import annotations
 
@@ -16,6 +17,7 @@ import json
 import sys
 from pathlib import Path
 
+import joblib
 import numpy as np
 import pandas as pd
 import plotly.express as px
@@ -26,19 +28,49 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from src.config import CITATION, SEED, Paths  # noqa: E402
 from src.evaluation.docs import LIMITATIONS  # noqa: E402
-from src.pipeline.engineer import (DISTANCE_LABELS, TRAFFIC_ORDER,  # noqa: E402
-                                   WEATHER_ORDER)
+from src.pipeline.engineer import (  # noqa: E402
+    CATEGORICAL_FEATURES, DISTANCE_BINS, DISTANCE_LABELS, FEATURE_SPEC, NUMERIC_FEATURES,
+    PREDICTORS, TRAFFIC_ORDER, WEATHER_ORDER,
+)
 
 MODEL_COLOR = "#2a78d6"   # categorical slot 1 (blue)
 NAIVE_COLOR = "#eb6834"   # categorical slot 2 (orange)
 CASE_TABLE_MAX_ROWS = 25
+PREDICT_DISCLAIMER = ("⚠️ Offline ops-proxy demo trained on public Kaggle data. No live GPS, "
+                      "routing or real-time traffic; not a production or customer-facing ETA. "
+                      "See **D6 Notes** for limitations.")
 SCATTER_MAX_POINTS = 4000
 BAND_ORDER = {"traffic_band": TRAFFIC_ORDER, "weather_band": WEATHER_ORDER,
               "distance_band": DISTANCE_LABELS}
 BAND_LABEL = {"traffic_band": "Traffic", "weather_band": "Weather", "distance_band": "Distance"}
 
+# Known levels for Predict selectboxes (source spelling kept for city_type).
+CAT_LEVELS: dict[str, list[str]] = {
+    "weather_band": list(WEATHER_ORDER),
+    "traffic_band": list(TRAFFIC_ORDER),
+    "distance_band": list(DISTANCE_LABELS),
+    "order_type": ["Snack", "Meal", "Drinks", "Buffet"],
+    "vehicle_type": ["motorcycle", "scooter", "electric_scooter", "bicycle"],
+    "festival": ["Yes", "No", "Unknown"],
+    "city_type": ["Metropolitian", "Urban", "Semi-Urban", "Unknown"],
+}
+
+NUM_WIDGET = {
+    "courier_age": dict(min_value=15.0, max_value=70.0, step=1.0),
+    "courier_rating": dict(min_value=1.0, max_value=5.0, step=0.1),
+    "vehicle_condition": dict(min_value=0.0, max_value=3.0, step=1.0),
+    "multiple_deliveries": dict(min_value=0.0, max_value=3.0, step=1.0),
+    "distance_km": dict(min_value=0.0, max_value=50.0, step=0.1),
+    "coords_placeholder": dict(min_value=0.0, max_value=1.0, step=1.0),
+    "prep_time_min": dict(min_value=0.0, max_value=120.0, step=1.0),
+    "pickup_hour": dict(min_value=0.0, max_value=23.0, step=1.0),
+    "day_of_week": dict(min_value=0.0, max_value=6.0, step=1.0),
+    "is_weekend": dict(min_value=0.0, max_value=1.0, step=1.0),
+}
+
 st.set_page_config(page_title="Food Delivery Time Analytics", page_icon="🛵", layout="wide")
 PATHS = Paths.default()
+PREFERRED_MODEL = PATHS.models_dir / "preferred_model.joblib"
 
 
 def _mtime(p: Path) -> float:
@@ -58,6 +90,11 @@ def load_csv(path: str, _mtime: float) -> pd.DataFrame:
 @st.cache_data
 def load_parquet(path: str, _mtime: float) -> pd.DataFrame:
     return pd.read_parquet(path)
+
+
+@st.cache_resource
+def load_preferred_model(path: str, _mtime: float):
+    return joblib.load(path)
 
 
 def require(*paths: Path) -> None:
@@ -81,6 +118,68 @@ def fmt(x: float) -> str:
     return f"{x:.2f}"
 
 
+def distance_band_for_km(km: float) -> str:
+    """Map distance_km to DISTANCE_LABELS using the same bins as training."""
+    label = pd.cut([float(km)], bins=DISTANCE_BINS, labels=DISTANCE_LABELS, right=False)[0]
+    return str(label)
+
+
+def cat_options(col: str, data: pd.DataFrame) -> list[str]:
+    known = list(CAT_LEVELS[col])
+    extras = sorted(set(data[col].astype(str).unique()) - set(known))
+    return known + extras
+
+
+def default_predictor_values(feats: pd.DataFrame) -> dict:
+    """Sensible form defaults: numeric medians, categorical modes (training features)."""
+    values: dict = {}
+    for col in NUMERIC_FEATURES:
+        values[col] = float(feats[col].median())
+    for col in CATEGORICAL_FEATURES:
+        values[col] = str(feats[col].astype(str).mode().iloc[0])
+    values["distance_band"] = distance_band_for_km(values["distance_km"])
+    return values
+
+
+def build_predict_frame(values: dict) -> pd.DataFrame:
+    """One-row DataFrame with columns = PREDICTORS (training order/dtypes)."""
+    row = {c: values[c] for c in PREDICTORS}
+    for c in NUMERIC_FEATURES:
+        row[c] = float(row[c])
+    for c in CATEGORICAL_FEATURES:
+        row[c] = str(row[c])
+    return pd.DataFrame([row], columns=PREDICTORS)
+
+
+def _widget_value(col: str, value, defaults: dict):
+    """Coerce a feature value into something the Predict widget accepts (NaN -> default)."""
+    if col in NUMERIC_FEATURES:
+        if pd.isna(value):
+            value = defaults[col]
+        w = NUM_WIDGET[col]
+        return float(min(max(float(value), w["min_value"]), w["max_value"]))
+    return str(value)
+
+
+def fill_from_holdout(holdout: pd.DataFrame, defaults: dict) -> None:
+    """Button callback: load one random hold-out row into the Predict form (illustration)."""
+    n = st.session_state.get("pred_fill_n", 0)
+    row = holdout.sample(1, random_state=SEED + n).iloc[0]
+    st.session_state["pred_fill_n"] = n + 1
+    for col in PREDICTORS:
+        st.session_state[f"pred_{col}"] = _widget_value(col, row[col], defaults)
+    st.session_state["pred_auto_band"] = True
+    st.session_state["pred_y_true"] = float(row["y_true"])
+    st.session_state["pred_run"] = True
+
+
+def reset_predict_form(defaults: dict) -> None:
+    for col in PREDICTORS:
+        st.session_state[f"pred_{col}"] = defaults[col]
+    st.session_state["pred_auto_band"] = True
+    st.session_state.pop("pred_y_true", None)
+
+
 # ---------------------------------------------------------------- landing + D6 banner
 require(PATHS.metrics, PATHS.features, PATHS.y_pred_holdout, PATHS.subgroup_metrics)
 metrics = load_json(str(PATHS.metrics), _mtime(PATHS.metrics))
@@ -101,7 +200,7 @@ if metrics.get("fast_mode"):
     st.error("These metrics were produced in **fast/smoke mode** and are NOT valid results.")
 
 tabs = st.tabs(["D1 Overview", "D2 Drivers", "D3 Pred vs actual", "D4 Subgroup errors",
-                "D5 Case table", "D6 Notes"])
+                "D5 Case table", "D6 Notes", "Predict"])
 
 # ---------------------------------------------------------------- D1 Overview
 with tabs[0]:
@@ -286,3 +385,76 @@ with tabs[5]:
                 "redistributed by this repo. Details: `docs/model_card.md`, "
                 "`docs/datasheet_lite.md`, `docs/data_dictionary.md`, `docs/transform_log.md`.")
     st.caption(f"metrics.json generated {metrics['generated_at']} · notes: {metrics['notes']}")
+
+# ---------------------------------------------------------------- Predict
+with tabs[6]:
+    st.subheader("Predict delivery duration")
+    st.caption(f"Scores one order with the preferred model (`{metrics['preferred_model']}`). "
+               "Interactive only: nothing entered here is written to metrics.json or used in "
+               "evaluation.")
+    if not PREFERRED_MODEL.exists():
+        st.error(f"Missing model artefact `{PREFERRED_MODEL.relative_to(PATHS.root)}`. "
+                 "Run `bash scripts/run_all.sh` first to train it; no prediction is shown "
+                 "without the trained model.")
+    else:
+        model = load_preferred_model(str(PREFERRED_MODEL), _mtime(PREFERRED_MODEL))
+        typical = default_predictor_values(feats)
+        defaults = {c: _widget_value(c, typical[c], typical) for c in PREDICTORS}
+        for col in PREDICTORS:
+            st.session_state.setdefault(f"pred_{col}", defaults[col])
+        st.session_state.setdefault("pred_auto_band", True)
+
+        b = st.columns([1, 1, 3])
+        b[0].button("Fill from random hold-out row", key="pred_fill", on_click=fill_from_holdout,
+                    args=(holdout, defaults), help="Loads a real hold-out order for illustration")
+        b[1].button("Reset to typical order", key="pred_reset", on_click=reset_predict_form,
+                    args=(defaults,), help="Training-data medians (numeric) and modes (categorical)")
+
+        def num(container, col: str) -> None:
+            w = NUM_WIDGET[col]
+            container.number_input(col, key=f"pred_{col}", help=FEATURE_SPEC[col][1],
+                                   format="%.0f" if w["step"] >= 1 else "%.2f", **w)
+
+        def cat(container, col: str, **kw) -> None:
+            container.selectbox(col, cat_options(col, feats), key=f"pred_{col}",
+                                help=FEATURE_SPEC[col][1], **kw)
+
+        left, mid, right = st.columns(3)
+        left.markdown("**Courier & vehicle**")
+        for col in ["courier_age", "courier_rating", "vehicle_condition", "multiple_deliveries"]:
+            num(left, col)
+        cat(left, "vehicle_type")
+        mid.markdown("**Order & conditions**")
+        for col in ["order_type", "weather_band", "traffic_band", "festival", "city_type"]:
+            cat(mid, col)
+        right.markdown("**Distance & timing**")
+        num(right, "distance_km")
+        auto_band = right.checkbox("Derive distance band from distance_km", key="pred_auto_band")
+        if auto_band:  # set before the widget is created, so the disabled box shows it
+            st.session_state["pred_distance_band"] = distance_band_for_km(
+                st.session_state["pred_distance_km"])
+        cat(right, "distance_band", disabled=auto_band)
+        for col in ["coords_placeholder", "prep_time_min", "pickup_hour", "day_of_week",
+                    "is_weekend"]:
+            num(right, col)
+
+        clicked = st.button("Predict", type="primary", key="pred_go")
+        if clicked or st.session_state.pop("pred_run", False):
+            X = build_predict_frame({c: st.session_state[f"pred_{c}"] for c in PREDICTORS})
+            y_hat = float(model.predict(X)[0])
+            if not np.isfinite(y_hat):
+                st.error("The model returned a non-finite value for these inputs; "
+                         "no prediction is shown.")
+            else:
+                st.success(f"**Predicted duration: {y_hat:.1f} minutes**")
+                y_true = st.session_state.pop("pred_y_true", None)
+                if y_true is not None and not clicked:
+                    st.info(f"Illustration only, not evaluation: this hold-out order actually "
+                            f"took **{y_true:.0f} min** (error {y_hat - y_true:+.1f} min). "
+                            "See D1/D3 for the evaluated hold-out metrics.")
+            st.caption(PREDICT_DISCLAIMER)
+            with st.expander("Model input row"):
+                st.dataframe(X, hide_index=True, width="stretch")
+        else:
+            st.session_state.pop("pred_y_true", None)
+            st.caption(PREDICT_DISCLAIMER)

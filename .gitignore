@@ -17,6 +17,8 @@ data/splits/*
 
 # Large binary model files are rebuilt by scripts/run_all.sh
 artifacts/models/*.joblib
+# The preferred model is small and needed by the deployed Predict tab
+!artifacts/models/preferred_model.joblib
 
 # Credentials must never be committed
 kaggle.json
