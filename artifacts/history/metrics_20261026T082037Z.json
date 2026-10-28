@@ -1,0 +1,108 @@
+{
+  "generated_at": "2026-10-26T08:20:37+00:00",
+  "seed": 42,
+  "split": "holdout",
+  "n_train": 36474,
+  "n_holdout": 9119,
+  "naive": {
+    "mae": 7.5523,
+    "rmse": 9.3494
+  },
+  "naive_train_mean": 26.2778,
+  "preferred_model": "m3_lightgbm",
+  "preferred": {
+    "mae": 3.1037,
+    "rmse": 3.9131
+  },
+  "preferred_params": {
+    "subsample_freq": 1,
+    "subsample": 0.9,
+    "num_leaves": 31,
+    "min_child_samples": 20,
+    "learning_rate": 0.03,
+    "colsample_bytree": 1.0
+  },
+  "selection_rule": "lowest train-CV MAE among M1-M3 (hold-out not used for selection)",
+  "beats_naive_mae": true,
+  "beats_naive_rmse": true,
+  "improvement_vs_naive_pct": {
+    "mae": 58.9,
+    "rmse": 58.15
+  },
+  "leaderboard": [
+    {
+      "model": "m3_lightgbm",
+      "mae": 3.1037,
+      "rmse": 3.9131,
+      "cv_mae": 3.0885,
+      "cv_rmse": 3.8737,
+      "selected": true
+    },
+    {
+      "model": "m2_random_forest",
+      "mae": 3.1337,
+      "rmse": 3.946,
+      "cv_mae": 3.0907,
+      "cv_rmse": 3.8652,
+      "selected": false
+    },
+    {
+      "model": "m3_xgboost",
+      "mae": 3.1221,
+      "rmse": 3.9373,
+      "cv_mae": 3.099,
+      "cv_rmse": 3.893,
+      "selected": false
+    },
+    {
+      "model": "m1_elasticnet",
+      "mae": 4.6952,
+      "rmse": 5.8895,
+      "cv_mae": 4.6643,
+      "cv_rmse": 5.8521,
+      "selected": false
+    },
+    {
+      "model": "m1_ols",
+      "mae": 4.6957,
+      "rmse": 5.8893,
+      "cv_mae": 4.6649,
+      "cv_rmse": 5.8528,
+      "selected": false
+    },
+    {
+      "model": "m0_naive",
+      "mae": 7.5523,
+      "rmse": 9.3494,
+      "cv_mae": 7.6025,
+      "cv_rmse": 9.3925,
+      "selected": false
+    }
+  ],
+  "subgroup_min_n": 50,
+  "subgroup_low_n_cells": 4,
+  "top_features": [
+    "weather_band",
+    "traffic_band",
+    "distance_km",
+    "courier_age",
+    "courier_rating"
+  ],
+  "sensitivity": {
+    "dropped_feature": "courier_rating",
+    "mae": 3.3471,
+    "rmse": 4.1655
+  },
+  "fast_mode": false,
+  "notes": "ops-proxy demo; not production ETA",
+  "sha256": {
+    "raw_csv": "d293b6fc7157aef30fb34301216a3432ec895d407ce2ea9edddf942b416cdde1",
+    "features_parquet": "c2e0fa5c16d4faecad2b34e5b8cd3e87a6b21e571e0c88f742abf5e2d0f888b3",
+    "row_ids_json": "0fdf8fde004270f8cc56ca63f333020e587237596f48ca366f739149b25a242e",
+    "preferred_model_joblib": "db00c57f494bd073e9c2b8eba6b93f2b229eb8fec51c1ec529fb5ba94e228af3",
+    "y_pred_holdout_csv": "a97f26198a9689eb21fb9d7b0d64775bb16cf336f77d61c3103a8d641f8f44b3",
+    "leaderboard_csv": "7ede32da56ef06e28efc72476f4a1e99401dce82d22090b24eeab7de0b54f4dd",
+    "subgroup_metrics_csv": "fb9d63543428035b48bedd8ec1cf413ee40bf25ef9844d5941da2132ab3bf1f9"
+  },
+  "success_criteria_met": true
+}

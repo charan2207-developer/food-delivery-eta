@@ -1,0 +1,12 @@
+{
+  "model": "m0_naive",
+  "train_mean": 26.2778,
+  "cv_mae": 7.602539999999999,
+  "cv_rmse": 9.39252,
+  "holdout": {
+    "mae": 7.5523,
+    "rmse": 9.3494
+  },
+  "n_train": 36474,
+  "n_holdout": 9119
+}

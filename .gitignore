@@ -1,0 +1,24 @@
+# Environments / caches
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.ipynb_checkpoints/
+.DS_Store
+
+# Data is regenerated locally from Kaggle and never redistributed (licence / privacy)
+data/raw/*
+data/interim/*
+data/features/*
+data/splits/*
+!data/**/.gitkeep
+# Engineered features are small and needed by the deployed dashboard
+!data/features/delivery_features.parquet
+
+# Large binary model files are rebuilt by scripts/run_all.sh
+artifacts/models/*.joblib
+
+# Credentials must never be committed
+kaggle.json
+credentials.json
+.env

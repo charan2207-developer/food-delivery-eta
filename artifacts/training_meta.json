@@ -1,0 +1,43 @@
+{
+  "seed": 42,
+  "cv_folds": 5,
+  "fast_mode": false,
+  "selection_rule": "lowest train-CV MAE among M1-M3 (hold-out not used for selection)",
+  "preferred_model": "m3_lightgbm",
+  "preferred_params": {
+    "subsample_freq": 1,
+    "subsample": 0.9,
+    "num_leaves": 31,
+    "min_child_samples": 20,
+    "learning_rate": 0.03,
+    "colsample_bytree": 1.0
+  },
+  "numeric_features": [
+    "courier_age",
+    "courier_rating",
+    "vehicle_condition",
+    "multiple_deliveries",
+    "distance_km",
+    "coords_placeholder",
+    "prep_time_min",
+    "pickup_hour",
+    "day_of_week",
+    "is_weekend"
+  ],
+  "categorical_features": [
+    "weather_band",
+    "traffic_band",
+    "distance_band",
+    "order_type",
+    "vehicle_type",
+    "festival",
+    "city_type"
+  ],
+  "n_train": 36474,
+  "n_holdout": 9119,
+  "input_sha256": {
+    "features": "c2e0fa5c16d4faecad2b34e5b8cd3e87a6b21e571e0c88f742abf5e2d0f888b3",
+    "row_ids": "0fdf8fde004270f8cc56ca63f333020e587237596f48ca366f739149b25a242e"
+  },
+  "python": "3.10.20"
+}

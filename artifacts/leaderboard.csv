@@ -1,0 +1,7 @@
+model,step,family,cv_mae,cv_rmse,holdout_mae,holdout_rmse,fit_seconds,best_params,selected
+m3_lightgbm,M3,boost,3.0885,3.8737,3.1037,3.9131,58.1,"{""subsample_freq"": 1, ""subsample"": 0.9, ""num_leaves"": 31, ""min_child_samples"": 20, ""learning_rate"": 0.03, ""colsample_bytree"": 1.0}",True
+m2_random_forest,M2,rf,3.0907,3.8652,3.1337,3.946,32.5,"{""min_samples_leaf"": 1, ""max_features"": 0.6, ""max_depth"": 12}",False
+m3_xgboost,M3,boost,3.099,3.893,3.1221,3.9373,52.1,"{""subsample"": 0.9, ""min_child_weight"": 5, ""max_depth"": 6, ""learning_rate"": 0.03, ""colsample_bytree"": 1.0}",False
+m1_elasticnet,M1,linear,4.6643,5.8521,4.6952,5.8895,4.8,"{""alpha"": 0.001, ""l1_ratio"": 0.9}",False
+m1_ols,M1,linear,4.6649,5.8528,4.6957,5.8893,0.3,{},False
+m0_naive,M0,naive,7.6025,9.3925,7.5523,9.3494,0.0,{},False
